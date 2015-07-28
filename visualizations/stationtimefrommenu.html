@@ -2,7 +2,6 @@
     <head>
         <meta charset="utf-8">
         <title>Choose Station and Time</title>
-        <script type="text/javascript" src="d3.js"></script>
 		
 		<style type="text/css">
 		.axis path,
@@ -12,28 +11,16 @@
     <body>
 		Test visualizations for the remote monitoring system.
 		<br>
+<!-- 		<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/3.5.6/d3.min.js" charset="utf-8"></script> -->
+				<script type="text/javascript" src="d3.js"></script>
         <script type="text/javascript">
 
-		var w = 500;
-		var h = 200;
-		var buffer_x = 60;
-		var buffer_y = 30;
-
-		var pathname;
-		var stationToCSV = {"dummy":0,"Station 1":"fakedata.csv", "Station 2":"morefakedata.csv"};
-		var stationmenu = d3.select("body").append("select").attr("class","select").attr("id","stationmenu")
-							.on("change",getpath);
+		var pathname, stationmenu;
+		var stationToCSV = {"dummy":0,
+							"Station 1":"fakedata.csv", 
+							"Station 2":"morefakedata.csv"};
 		
-		stationmenu.append("option").text("Select a station")
-								.attr({
-									selected:"selected",
-									disabled:"disabled"
-								});
-		
-		var stationoptions = stationmenu.selectAll("option").data(d3.keys(stationToCSV)).enter()
-						.append("option").text(function(d) {return d;});
-
-		var startTime, endTime, now = new Date();						
+		var startTime, endTime, now = new Date(),timemenu;						
 		var startTimes = {"dummy":0,
 							"Lifetime" : 0,
 							"All Time" : 0,
@@ -41,31 +28,30 @@
 							"This Week" : d3.time.week(now),
 							"This Month" : d3.time.month(now),
 							"This Year" : d3.time.year(now)};
-							
-		var timemenu = d3.select("body").append("select").attr("class","select").attr("id","timemenu")
-						.on("change",changescale);
-
-		timemenu.append("option").text("Select a time range")
+		
+		function makemenu(dict,menu,id,changefxn,noun) {
+			menu = d3.select("body").append("select").attr("class","select").attr("id",id)
+							.on("change",changefxn);
+			menu.append("option").text("Select a "+noun)
 								.attr({
 									selected:"selected",
 									disabled:"disabled"
 								});
-		
-		var timeoptions = timemenu.selectAll("option").data(d3.keys(startTimes)).enter()
+			menu.selectAll("option").data(d3.keys(dict)).enter()
 						.append("option").text(function(d) {return d;});
+		};
+		
+		makemenu(stationToCSV,stationmenu,"stationmenu",getpath,"station");
+		makemenu(startTimes,timemenu,"timemenu",changescale,"time range");		
 						
-		var customTimeFormat = d3.time.format.multi([
-		  ["%H00", function(d) { return d.getHours(); }],
-		  ["%m/%d", function(d) { return d.getMonth() && d.getDate() != 1; }],
-		  ["%Y", function() { return true; }]
-		]);
-						
+		var w = 500, h = 200;
+		var buffer_x = 60, buffer_y = 30;
 		var svg1, svg2, svg3, svg4, svg5, svg6, svg7, svg8, svg9, svg10, svg11, svg12;
 		var graphs = [svg1, svg2, svg3,svg4,svg5,svg6,svg7,svg8,svg9,svg10,svg11,svg12];
 			
-		var names = ["Voltage 1","Current 1","Period 1","Delay 1",
-					"Voltage 2","Current 2","Period 2","Delay 2",
-					"Voltage 3","Current 3","Period 3","Delay 3"];		
+		var names = ["Voltage 1","Current 1","Frequency 1","Power Factor 1",
+					"Voltage 2","Current 2","Frequency 2","Power Factor 2",
+					"Voltage 3","Current 3","Frequency 3","Power Factor 3"];		
 			
 		for(i=0;i<names.length;i++){
 			if(i%4==0){
@@ -75,78 +61,86 @@
 			graphs[i] = d3.select("body").append("svg").attr("width",w).attr("height",h);
 		}		
 			
+		var parseTime = d3.time.format("%Y%m%d_%H%M%S").parse;
+		function getfreq(period) {
+			return Math.pow(10,6) / period;
+		}
+		// there may be problems with this function
+		function getPF(delay,period) {
+			return Math.cos(2*Math.PI*delay / period);
+		}
 		
+		var customTimeFormat = d3.time.format.multi([
+			["%H00", function(d) { return d.getHours(); }],
+			["%m/%d", function(d) { return d.getMonth() && d.getDate() != 1; }],
+			["%Y", function() { return true; }]
+		]);		
+		
+		function graphData(data,scaleX,xAxis){
+			for(i=0;i<names.length;i++){
+				var scaleY = d3.scale.linear().domain([0,1.2*d3.max(data, function(d) {return d[i+1];})])
+									.range([h - buffer_y, buffer_y]);
+					
+				var yAxis = d3.svg.axis().scale(scaleY).orient("left").ticks(5);
+
+				graphs[i].selectAll("*").remove();
+				graphs[i].selectAll("circle").data(data).enter().append("circle")
+						.attr("cx", function(d){return scaleX(d[0]);}) 
+						.attr("cy", function(d){return scaleY(d[i+1]);})
+						.attr("r",4);					
+				//graphs[i].selectAll("text").data(data).enter().append("text")
+					//	.text(function(d) {return d[i+1];})
+					//	.attr("x", function(d) {return scaleX(d[0]);}).attr("y",function(d){return scaleY(d[i+1])-5;});
+				graphs[i].append("g").attr("class","axis")
+						.attr("transform","translate(0," + (h - buffer_y) +")").call(xAxis);
+				graphs[i].append("g").attr("class","axis")
+						.attr("transform","translate(" + buffer_x + ",0)").call(yAxis);
+			}				
+		}
+			
 		function getpath(){
-			selectValue = d3.select("select").property("value")
-			pathname = stationToCSV[selectValue];
+			pathname = stationToCSV[d3.select("select#stationmenu").property("value")];
 			console.log(pathname);
 		};
 		
 		function changescale(){
-			selectValue = d3.select("select#timemenu").property("value");
+			selectValue = d3.select("select#timemenu").property("value")
 			startTime = startTimes[selectValue];
-			console.log(startTime);
-			console.log(now);
+			console.log(startTime, now);
+			console.log(pathname);
 			
-			var pathtocsv = pathname;
-			console.log(pathtocsv);
-			
-			var dataset;
-			var parseTime = d3.time.format("%Y%m%d_%H%M%S").parse;
-			//TODO parse period and delay to get frequency, power factor?
-						
+			var dataset;						
 			d3.text(pathname, "text/csv", function(text){
 				dataset = d3.csv.parseRows(text, function(text){
-					return [parseTime(text[0]),+text[1],+text[2],+text[3],+text[4],
-												+text[5],+text[6],+text[7],+text[8],
-												+text[9],+text[10],+text[11],+text[12]];
+					return [parseTime(text[0]),+text[1],+text[2],getfreq(+text[3]),getPF(+text[4],+text[3]),
+										+text[5],+text[6],getfreq(+text[7]),getPF(+text[8],+text[7]),
+										+text[9],+text[10],getfreq(+text[11]),getPF(+text[12],+text[11])];
 				});
 				console.log(dataset);
-				minTime = d3.min(dataset,function(d){return d[0];});
+				
+				var minTime = d3.min(dataset, function(d) {return d[0];});
+				var maxTime = d3.max(dataset, function(d) {return d[0];});
+
+				endTime = (selectValue == "Lifetime") ? maxTime : now;
+				
 				if(startTime < minTime){
 					startTime = minTime;
 					console.log("Warning: time scale chosen predates logs, earliest log chosen for greater readability")
 				};
-				if(selectValue=="Lifetime"){
-					endTime = d3.max(dataset, function(d) {return d[0];});
-				}
-				else {
-					endTime = now;
-				}
 
-				if(startTime > endTime){
+				if(startTime > maxTime){
 					console.log("Error: no logs in time range selected.");
 				}
 				else {
-					console.log("good to go");
 					var scaleX = d3.time.scale()
-									.domain([startTime,endTime]).nice()
+									.domain([d3.time.day(startTime),endTime]).nice()
 									.range([buffer_x,w - buffer_x]);
 					var xAxis = d3.svg.axis().scale(scaleX).orient("bottom")
 										.ticks(5)
 										.tickFormat(customTimeFormat);				
 				};
 				
-				for(i=0;i<names.length;i++){
-
-					var scaleY = d3.scale.linear().domain([0,1.2*d3.max(dataset, function(d) {return d[i+1];})])
-									.range([h - buffer_y, buffer_y]);
-					
-					var yAxis = d3.svg.axis().scale(scaleY).orient("left").ticks(5);
-
-					graphs[i].selectAll("*").remove();
-					graphs[i].selectAll("circle").data(dataset).enter().append("circle")
-							.attr("cx", function(d){return scaleX(d[0]);}) 
-							.attr("cy", function(d){return scaleY(d[i+1]);})
-							.attr("r",5);					
-					graphs[i].selectAll("text").data(dataset).enter().append("text")
-							.text(function(d) {return d[i+1];})
-							.attr("x", function(d) {return scaleX(d[0]);}).attr("y",function(d){return scaleY(d[i+1])-5;});
-					graphs[i].append("g").attr("class","axis")
-							.attr("transform","translate(0," + (h - buffer_y) +")").call(xAxis);
-					graphs[i].append("g").attr("class","axis")
-							.attr("transform","translate(" + buffer_x + ",0)").call(yAxis);
-				}				
+				graphData(dataset,scaleX,xAxis);
 			});
 		};
 
