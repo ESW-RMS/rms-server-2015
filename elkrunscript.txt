@@ -1,8 +1,0 @@
-echo "run ELK automatically"
-cd %HOMEPATH%
-del .sincedb*
-cd Desktop/ESWReceiver
-start cmd /k /min "cd elasticsearch-1.6.0/bin&&elasticsearch.bat"
-ping localhost:9200
-echo "pinging Elasticsearch"
-start cmd /k /min "cd logstash-1.5.2/bin&&logstash agent -f smstocsv.conf"
