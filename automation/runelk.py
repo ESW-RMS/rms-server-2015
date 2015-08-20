@@ -1,12 +1,16 @@
 import subprocess, time, signal, os
 
 p = subprocess.Popen("elkrun.bat",cwd=r"C:\path\to\automationfiles",stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.STDOUT)
+timeout = time.time() + 5*60
 for line in p.stdout:
     if "reason: zen-disco-receive" in line:
+        print "Logstash started"
         break
-print "Logstash started"
-time.sleep(60)
-print "60 seconds have passed."
+    if time.time() > timeout:
+        print "Logstash presumed to have started"
+        break
+time.sleep(180)
+print "180 seconds have passed."
 for i in range(0,3):
     print i
     if p.terminate():
